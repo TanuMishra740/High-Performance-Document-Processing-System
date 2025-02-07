@@ -18,6 +18,7 @@ This project is designed to rapidly process large PDF documents (100+ pages) usi
 🔎 Optimized for Large Documents with Minimal Memory Use
 
 📂 Project Structure
+
 high_performance_doc_processing/
 │── src/
 │   ├── extract_text.py        # Extracts text & tables  

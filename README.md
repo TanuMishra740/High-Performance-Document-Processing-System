@@ -1,2 +1,75 @@
-# High-Performance-Document-Processing-System
-A system for rapid processing of large PDF documents with efficient data extraction and analysis capabilities.
+import fitz  # PyMuPDF for PDF text extraction
+import pdfplumber  # For table extraction
+import pandas as pd  # For handling tables
+import concurrent.futures  # For parallel processing
+import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+import time
+from transformers import pipeline
+import psutil  # For monitoring memory usage
+import torch
+import tensorflow as tf
+from torch import Tensor
+
+
+# ---------------------- CONFIGURATIONS ----------------------
+MAX_WORKERS = os.cpu_count() or 4  # Utilize available CPU cores
+
+# ---------------------- PDF TEXT EXTRACTION ----------------------
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file using PyMuPDF."""
+    doc = fitz.open(pdf_path)
+    text_chunks = [page.get_text("text") for page in doc]
+    return text_chunks
+
+# ---------------------- TABLE EXTRACTION ----------------------
+def extract_tables_from_pdf(pdf_path):
+    """Extract tables from a PDF using pdfplumber."""
+    tables = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            extracted_table = page.extract_table()
+            if extracted_table:
+                tables.append(pd.DataFrame(extracted_table))
+    return tables
+
+# ---------------------- PARALLEL PROCESSING ----------------------
+def process_pdf(pdf_path):
+    """Process PDF by extracting text and tables in parallel."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        text_future = executor.submit(extract_text_from_pdf, pdf_path)
+        table_future = executor.submit(extract_tables_from_pdf, pdf_path)
+        return text_future.result(), table_future.result()
+
+# ---------------------- LLM-BASED ANSWERING ----------------------
+qa_pipeline = pipeline("question-answering", model="deepset/roberta-base-squad2")
+
+def answer_question(question, text):
+    """Use LLM to answer a question based on extracted PDF text."""
+    if not text:
+        return "No text available to answer the question."
+    return qa_pipeline({"question": question, "context": text})
+
+# ---------------------- PERFORMANCE BENCHMARKING ----------------------
+def measure_performance(pdf_path):
+    """Measure execution time and memory usage."""
+    start_time = time.time()
+    process = psutil.Process(os.getpid())
+    text, tables = process_pdf(pdf_path)
+    memory_usage = process.memory_info().rss  # Resident Set Size (RAM usage)
+    execution_time = time.time() - start_time
+    print(f"Execution Time: {execution_time:.2f} seconds")
+    print(f"Memory Usage: {memory_usage / (1024 * 1024):.2f} MB")
+    return text, tables
+
+# ---------------------- MAIN EXECUTION ----------------------
+if __name__ == "__main__":
+    pdf_file =  r"C:\Users\dell\OneDrive\Desktop\LLM Project\document.pdf"
+    text_content, tables_content = measure_performance(pdf_file)
+    print("Extracted Text Sample:", text_content[:5])  # Display first 5 extracted text chunks
+    print("Extracted Tables:", tables_content)
+    
+    # Ask a question to the LLM
+    question = "What is the main topic of the document?"
+    answer = answer_question(question, " ".join(text_content))
+    print("Answer:", answer)
